@@ -1,0 +1,37 @@
+{
+  "logging": {
+    "level": "INFO",
+    "rust_format": "{timestamp} [{level}] {target} - {message}"
+  },
+  "heartbeat": {
+    "enabled": true,
+    "intervalSecs": 5,
+    "destination": "local",
+    "measures": {
+      "cpu": true,
+      "memory": true,
+      "disk": false
+    }
+  },
+  "metricEmission": {
+    "target": "log",
+    "targetConfig": {
+      "logFileName": "target/config-component.metric.log"
+    }
+  },
+  "component": {
+    "token": "edgecommons-config-component",
+    "global": {
+      "configComponent": {
+        "catalogSource": {
+          "type": "file",
+          "path": "test-configs/catalog.json",
+          "watch": true
+        },
+        "pushOnCatalogReload": true,
+        "allowVolatileCatalogUpdates": false
+      }
+    },
+    "instances": []
+  }
+}

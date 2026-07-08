@@ -1,0 +1,6 @@
+target/
+greengrass-build/
+*.log
+*.metric.log
+.pytest_cache/
+.venv/

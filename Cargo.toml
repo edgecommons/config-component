@@ -1,0 +1,29 @@
+[package]
+name = "config-component"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+description = "Dedicated EdgeCommons split-configuration catalog server"
+publish = false
+
+[[bin]]
+name = "config-component"
+path = "src/main.rs"
+
+[features]
+default = ["standalone"]
+standalone = ["edgecommons/standalone"]
+greengrass = ["edgecommons/greengrass"]
+
+[dependencies]
+edgecommons = { path = "../core/libs/rust", default-features = false }
+anyhow = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+thiserror = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"

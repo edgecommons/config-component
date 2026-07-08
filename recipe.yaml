@@ -1,0 +1,69 @@
+---
+RecipeFormatVersion: "2020-01-25"
+ComponentName: "com.mbreissi.edgecommons.ConfigComponent"
+ComponentVersion: "1.0.0"
+ComponentDescription: "Dedicated EdgeCommons split-configuration catalog server"
+ComponentPublisher: "Marc Breissinger"
+ComponentDependencies:
+  aws.greengrass.TokenExchangeService:
+    VersionRequirement: ">=2.0.0"
+    DependencyType: "HARD"
+ComponentConfiguration:
+  DefaultConfiguration:
+    ComponentConfig:
+      logging:
+        level: "INFO"
+        rust_format: "{timestamp} [{level}] {target} - {message}"
+      heartbeat:
+        enabled: true
+        intervalSecs: 5
+        destination: "local"
+        measures:
+          cpu: true
+          memory: true
+          disk: false
+      metricEmission:
+        target: "log"
+        targetConfig:
+          logFileName: "/greengrass/v2/logs/{ComponentFullName}.metric.log"
+      component:
+        token: "edgecommons-config-component"
+        global:
+          configComponent:
+            catalogSource:
+              type: "file"
+              path: "/greengrass/v2/work/com.mbreissi.edgecommons.ConfigComponent/catalog.json"
+              watch: true
+            pushOnCatalogReload: true
+            allowVolatileCatalogUpdates: false
+        instances: []
+    accessControl:
+      aws.greengrass.ipc.pubsub:
+        "com.mbreissi.edgecommons.ConfigComponent:config-server-subscribe:1":
+          policyDescription: Allows the config server to receive CONFIG_COMPONENT requests.
+          operations:
+            - "aws.greengrass#SubscribeToTopic"
+          resources:
+            - "ecv1/*/config/main/cmd/get-configuration"
+            - "ecv1/*/config/main/cmd/update-catalog"
+            - "ecv1/*/edgecommons-config-component/main/cmd/*"
+            - "ecv1/*/_bcast/main/cmd/*"
+        "com.mbreissi.edgecommons.ConfigComponent:config-server-publish:1":
+          policyDescription: Allows the config server to reply, push bundles, and publish its own state.
+          operations:
+            - "aws.greengrass#PublishToTopic"
+          resources:
+            - "edgecommons/reply-*"
+            - "ecv1/*/*/main/cmd/set-config"
+            - "ecv1/*/edgecommons-config-component/main/state"
+            - "ecv1/*/edgecommons-config-component/main/cfg"
+Manifests:
+  - Platform:
+      os: linux
+    Artifacts:
+      - URI: "s3://BUCKET_NAME/COMPONENT_NAME/COMPONENT_VERSION/config-component"
+    Lifecycle:
+      Install:
+        Script: "chmod +x {artifacts:path}/config-component"
+      Run:
+        Script: "{artifacts:path}/config-component --platform GREENGRASS -c GG_CONFIG"

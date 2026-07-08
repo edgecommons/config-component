@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "version": "local-dev",
+  "provenance": {
+    "source": "file",
+    "uri": "test-configs/catalog.json"
+  },
+  "base": {
+    "logging": {
+      "level": "INFO"
+    },
+    "tags": {
+      "site": "dallas"
+    }
+  },
+  "components": {
+    "opcua-adapter": {
+      "component": {
+        "token": "opcua-adapter",
+        "global": {
+          "endpoint": "opc.tcp://plc-1:4840"
+        }
+      }
+    },
+    "modbus-adapter": {
+      "component": {
+        "token": "modbus-adapter",
+        "global": {
+          "unitId": 1
+        }
+      }
+    }
+  }
+}

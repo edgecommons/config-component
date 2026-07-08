@@ -1,0 +1,23 @@
+{
+  "component": {
+    "com.mbreissi.edgecommons.ConfigComponent": {
+      "author": "Marc Breissinger",
+      "version": "1.0.0",
+      "build": {
+        "build_system": "custom",
+        "custom_build_command": ["bash", "build.sh"]
+      },
+      "publish": {
+        "bucket": "REPLACE_ME",
+        "region": "us-east-1"
+      },
+      "ignore": [
+        ".idea",
+        "target/**",
+        "tests/**",
+        "docs/**"
+      ]
+    }
+  },
+  "gdk_version": "1.6.2"
+}
