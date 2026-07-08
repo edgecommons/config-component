@@ -13,7 +13,7 @@ the platform default `GG_CONFIG` and reads `ComponentConfig`.
 Required bootstrap config:
 
 - `component.token`: should be `edgecommons-config-component`
-- `component.global.configComponent.catalogSource`: v1 `file` or `configmap` source descriptor
+- `component.global.configComponent.catalogSource`: `file` or `configmap` source descriptor
 - `component.global.configComponent.pushOnCatalogReload`: optional boolean, default `true`
 - `component.global.configComponent.allowVolatileCatalogUpdates`: optional boolean, default `false`
 
@@ -22,7 +22,7 @@ not returned to other components.
 
 ## Catalog Source
 
-Catalog loading goes through the `CatalogSource` seam. v1 implements local JSON file and
+Catalog loading goes through the `CatalogSource` seam. The component supports local JSON file and
 Kubernetes ConfigMap-mounted file sources:
 
 ```json
@@ -49,7 +49,7 @@ absent in a source-loaded catalog, the server derives `version` from a `sha256:`
 
 ConfigMap sources are read/watch only. A ConfigMap change is applied by Kubernetes, observed through
 the mounted file, and promoted by the ConfigComponent. The component does not write back to the
-ConfigMap. Future sources, such as git-backed catalogs, plug in behind the same load/watch contract.
+ConfigMap.
 
 ## Catalog Format
 
@@ -137,9 +137,9 @@ Successful update replies are `CatalogUpdateAck` bodies:
 On a valid enabled update, the server promotes the replacement only to the active in-memory cache,
 replies with the promoted version/provenance, and publishes `SetConfig` bundles to every component
 in the catalog when `pushOnCatalogReload` is `true`. It never writes the replacement to the active
-file, ConfigMap, or future catalog source. The override is gone after restart or after a later
-source-side reload replaces it. Disabled updates, invalid updates, and invalid source reloads keep
-the previous active catalog and do not push.
+file or ConfigMap source. The override is gone after restart or after a later source-side reload
+replaces it. Disabled updates, invalid updates, and invalid source reloads keep the previous active
+catalog and do not push.
 
 ## Error Codes
 
