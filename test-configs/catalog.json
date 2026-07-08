@@ -5,28 +5,63 @@
     "source": "file",
     "uri": "test-configs/catalog.json"
   },
-  "base": {
-    "logging": {
-      "level": "INFO"
+  "hierarchy": {
+    "levels": ["enterprise", "site", "zone", "line", "device"]
+  },
+  "nodes": {
+    "enterprise/acme": {
+      "scope": { "enterprise": "acme" },
+      "config": {
+        "hierarchy": { "levels": ["enterprise", "site", "zone", "line", "device"] },
+        "identity": { "enterprise": "acme" },
+        "logging": { "level": "INFO" }
+      }
     },
-    "tags": {
-      "site": "dallas"
+    "site/dallas": {
+      "parent": "enterprise/acme",
+      "scope": { "enterprise": "acme", "site": "dallas" },
+      "config": {
+        "identity": { "site": "dallas" }
+      }
+    },
+    "zone/packaging": {
+      "parent": "site/dallas",
+      "scope": { "enterprise": "acme", "site": "dallas", "zone": "packaging" },
+      "config": { "identity": { "zone": "packaging" } }
+    },
+    "line/line-7": {
+      "parent": "zone/packaging",
+      "scope": {
+        "enterprise": "acme",
+        "site": "dallas",
+        "zone": "packaging",
+        "line": "line-7"
+      },
+      "config": { "identity": { "line": "line-7" } }
     }
   },
   "components": {
     "opcua-adapter": {
-      "component": {
-        "token": "opcua-adapter",
-        "global": {
-          "endpoint": "opc.tcp://plc-1:4840"
+      "parent": "line/line-7",
+      "config": {
+        "component": {
+          "token": "opcua-adapter",
+          "global": {
+            "endpoint": "opc.tcp://plc-1:4840"
+          },
+          "instances": []
         }
       }
     },
     "modbus-adapter": {
-      "component": {
-        "token": "modbus-adapter",
-        "global": {
-          "unitId": 1
+      "parent": "line/line-7",
+      "config": {
+        "component": {
+          "token": "modbus-adapter",
+          "global": {
+            "unitId": 1
+          },
+          "instances": []
         }
       }
     }

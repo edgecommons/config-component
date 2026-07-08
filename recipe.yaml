@@ -2,7 +2,7 @@
 RecipeFormatVersion: "2020-01-25"
 ComponentName: "com.mbreissi.edgecommons.ConfigComponent"
 ComponentVersion: "1.0.0"
-ComponentDescription: "Dedicated EdgeCommons split-configuration catalog server"
+ComponentDescription: "Dedicated EdgeCommons hierarchical-configuration catalog server"
 ComponentPublisher: "Marc Breissinger"
 ComponentDependencies:
   aws.greengrass.TokenExchangeService:

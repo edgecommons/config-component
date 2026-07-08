@@ -7,17 +7,44 @@ use config_component::coordinator::CatalogCoordinator;
 use config_component::source::{
     source_from_descriptor, CatalogSource, ConfigMapCatalogSource, FileCatalogSource,
 };
-use serde_json::json;
+use serde_json::{json, Value};
+
+fn catalog(version: Option<&str>, include_component: bool) -> Value {
+    let mut value = json!({
+        "schemaVersion": 1,
+        "hierarchy": { "levels": ["enterprise", "site", "zone", "line", "device"] },
+        "nodes": {},
+        "components": {}
+    });
+    if let Some(version) = version {
+        value["version"] = Value::String(version.to_string());
+    }
+    if include_component {
+        value["components"]["opcua-adapter"] = json!({
+            "config": {
+                "hierarchy": { "levels": ["enterprise", "site", "zone", "line", "device"] },
+                "identity": {
+                    "enterprise": "acme",
+                    "site": "integration-lab",
+                    "zone": "k8s-zone",
+                    "line": "line-7"
+                },
+                "component": { "token": "opcua-adapter", "instances": [] }
+            }
+        });
+    }
+    value
+}
+
+fn write_catalog(path: &std::path::Path, value: &Value) {
+    std::fs::write(path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
+}
 
 #[test]
 fn file_source_loads_and_derives_version_when_absent() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("catalog.json");
-    std::fs::write(
-        &path,
-        r#"{ "schemaVersion": 1, "components": { "opcua-adapter": { "component": { "token": "opcua-adapter" } } } }"#,
-    )
-    .unwrap();
+    write_catalog(&path, &catalog(None, true));
 
     let source = FileCatalogSource::new(&path, false);
     let snapshot = source.load().unwrap();
@@ -31,19 +58,11 @@ fn file_source_loads_and_derives_version_when_absent() {
 async fn file_source_watch_polls_for_replacement() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("catalog.json");
-    std::fs::write(
-        &path,
-        r#"{ "schemaVersion": 1, "version": "old", "components": {} }"#,
-    )
-    .unwrap();
+    write_catalog(&path, &catalog(Some("old"), false));
 
     let source = FileCatalogSource::with_poll_interval(&path, true, Duration::from_millis(25));
     let mut rx = source.watch().unwrap();
-    std::fs::write(
-        &path,
-        r#"{ "schemaVersion": 1, "version": "new", "components": {} }"#,
-    )
-    .unwrap();
+    write_catalog(&path, &catalog(Some("new"), false));
 
     let snapshot = tokio::time::timeout(Duration::from_secs(2), rx.recv())
         .await
@@ -56,11 +75,7 @@ async fn file_source_watch_polls_for_replacement() {
 fn descriptor_builds_file_source() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("catalog.json");
-    std::fs::write(
-        &path,
-        r#"{ "schemaVersion": 1, "version": "file", "components": {} }"#,
-    )
-    .unwrap();
+    write_catalog(&path, &catalog(Some("file"), false));
 
     let source = source_from_descriptor(&json!({
         "type": "file",
@@ -75,11 +90,7 @@ fn descriptor_builds_file_source() {
 fn configmap_source_loads_as_read_only_with_configmap_provenance() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("catalog.json");
-    std::fs::write(
-        &path,
-        r#"{ "schemaVersion": 1, "components": { "opcua-adapter": { "component": { "token": "opcua-adapter" } } } }"#,
-    )
-    .unwrap();
+    write_catalog(&path, &catalog(None, true));
 
     let source = ConfigMapCatalogSource::new(&path, false);
     let snapshot = source.load().unwrap();
@@ -93,11 +104,7 @@ fn configmap_source_loads_as_read_only_with_configmap_provenance() {
 fn descriptor_builds_configmap_source_from_mount_dir_and_key() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("catalog.json");
-    std::fs::write(
-        &path,
-        r#"{ "schemaVersion": 1, "version": "mounted", "components": {} }"#,
-    )
-    .unwrap();
+    write_catalog(&path, &catalog(Some("mounted"), false));
 
     let source = source_from_descriptor(&json!({
         "type": "configmap",
@@ -116,19 +123,11 @@ fn descriptor_builds_configmap_source_from_mount_dir_and_key() {
 async fn configmap_source_watch_polls_for_mounted_file_replacement() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("catalog.json");
-    std::fs::write(
-        &path,
-        r#"{ "schemaVersion": 1, "version": "old", "components": {} }"#,
-    )
-    .unwrap();
+    write_catalog(&path, &catalog(Some("old"), false));
 
     let source = ConfigMapCatalogSource::with_poll_interval(&path, true, Duration::from_millis(25));
     let mut rx = source.watch().unwrap();
-    std::fs::write(
-        &path,
-        r#"{ "schemaVersion": 1, "version": "new", "components": {} }"#,
-    )
-    .unwrap();
+    write_catalog(&path, &catalog(Some("new"), false));
 
     let snapshot = tokio::time::timeout(Duration::from_secs(2), rx.recv())
         .await
@@ -141,12 +140,8 @@ async fn configmap_source_watch_polls_for_mounted_file_replacement() {
 fn update_catalog_disabled_by_default_does_not_overwrite_configmap_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("catalog.json");
-    let original_catalog = json!({
-        "schemaVersion": 1,
-        "version": "old",
-        "components": {}
-    });
-    std::fs::write(&path, serde_json::to_vec_pretty(&original_catalog).unwrap()).unwrap();
+    let original_catalog = catalog(Some("old"), false);
+    write_catalog(&path, &original_catalog);
     let original_bytes = std::fs::read(&path).unwrap();
 
     let source = source_from_descriptor(&json!({
@@ -161,13 +156,7 @@ fn update_catalog_disabled_by_default_does_not_overwrite_configmap_file() {
 
     let result = coordinator.update_from_message(&json!({
         "version": "new",
-        "catalog": {
-            "schemaVersion": 1,
-            "version": "new",
-            "components": {
-                "opcua-adapter": { "component": { "token": "opcua-adapter" } }
-            }
-        }
+        "catalog": catalog(Some("new"), true)
     }));
 
     assert_eq!(result.ack["error"]["code"], CATALOG_UPDATE_DISABLED);
@@ -180,12 +169,8 @@ fn update_catalog_disabled_by_default_does_not_overwrite_configmap_file() {
 fn volatile_update_catalog_can_override_configmap_cache_without_overwriting_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("catalog.json");
-    let original_catalog = json!({
-        "schemaVersion": 1,
-        "version": "old",
-        "components": {}
-    });
-    std::fs::write(&path, serde_json::to_vec_pretty(&original_catalog).unwrap()).unwrap();
+    let original_catalog = catalog(Some("old"), false);
+    write_catalog(&path, &original_catalog);
     let original_bytes = std::fs::read(&path).unwrap();
 
     let source = source_from_descriptor(&json!({
@@ -200,13 +185,7 @@ fn volatile_update_catalog_can_override_configmap_cache_without_overwriting_file
 
     let result = coordinator.update_from_message(&json!({
         "version": "new",
-        "catalog": {
-            "schemaVersion": 1,
-            "version": "new",
-            "components": {
-                "opcua-adapter": { "component": { "token": "opcua-adapter" } }
-            }
-        }
+        "catalog": catalog(Some("new"), true)
     }));
 
     assert_eq!(result.ack["ok"], true);

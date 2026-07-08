@@ -152,7 +152,7 @@ impl CatalogCoordinator {
             );
         };
 
-        match catalog.bundle_for(component) {
+        match catalog.lineage_for(component) {
             Ok(bundle) => bundle,
             Err(error) => error.body(),
         }
@@ -208,6 +208,7 @@ impl CatalogCoordinator {
             raw_catalog.clone(),
             CatalogParseOptions {
                 source_provenance: Some(volatile_update_provenance()),
+                override_provenance: true,
                 require_explicit_version: true,
                 ..CatalogParseOptions::default()
             },
@@ -250,7 +251,7 @@ impl CatalogCoordinator {
         };
 
         catalog
-            .bundles()
+            .lineages()
             .into_iter()
             .map(|(token, body)| PushBundle {
                 topic: format!("ecv1/{}/{token}/main/cmd/set-config", self.device_token),
@@ -294,6 +295,7 @@ fn parse_source_snapshot(
         CatalogParseOptions {
             derived_version: Some(snapshot.version.clone()),
             source_provenance: Some(snapshot.provenance.clone()),
+            override_provenance: false,
             require_explicit_version,
         },
     )

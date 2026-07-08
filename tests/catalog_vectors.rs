@@ -1,24 +1,36 @@
 use std::sync::{Arc, Mutex};
 
-use config_component::catalog::{Catalog, CatalogParseOptions, CATALOG_INVALID};
+use config_component::catalog::{Catalog, CatalogParseOptions};
 use config_component::coordinator::CatalogCoordinator;
 use config_component::source::{CatalogSource, ReadOnlyCatalogSource, SourceSnapshot};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
-fn vectors() -> Vec<Value> {
+fn vectors() -> Value {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../core/split-config-test-vectors/config-component-catalogs.json");
-    let raw: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
-    raw["cases"].as_array().unwrap().clone()
+        .join("../core/hierarchical-config-test-vectors/catalogs.json");
+    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
 }
 
-fn vector_case(name: &str) -> Value {
-    vectors()
-        .into_iter()
+fn valid_case(name: &str) -> Value {
+    vectors()["validCatalogs"]
+        .as_array()
+        .unwrap()
+        .iter()
         .find(|case| case["name"] == name)
-        .unwrap_or_else(|| panic!("missing vector {name}"))
+        .cloned()
+        .unwrap_or_else(|| panic!("missing valid catalog vector {name}"))
+}
+
+fn invalid_case(name: &str) -> Value {
+    vectors()["invalidCatalogs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["name"] == name)
+        .cloned()
+        .unwrap_or_else(|| panic!("missing invalid catalog vector {name}"))
 }
 
 fn fingerprint(value: &Value) -> String {
@@ -70,260 +82,261 @@ impl CatalogSource for MemorySource {
 }
 
 #[test]
-fn valid_catalog_with_base_and_two_components_vector() {
-    let case = vector_case("valid-catalog-with-base-and-two-components");
-    let catalog = Catalog::parse(
-        case["input"]["catalog"].clone(),
-        CatalogParseOptions::default(),
-    )
-    .unwrap();
+fn valid_four_layer_catalog_serves_lineage_bundle() {
+    let case = valid_case("four-layer-line-with-one-device");
+    let catalog = Catalog::parse(case["catalog"].clone(), CatalogParseOptions::default()).unwrap();
 
     assert_eq!(catalog.version, case["expected"]["version"]);
     assert_eq!(
         catalog.components.len(),
         case["expected"]["componentCount"].as_u64().unwrap() as usize
     );
-    assert_eq!(
-        catalog.bundle_for("opcua-adapter").unwrap(),
-        json!({
-            "base": { "logging": { "level": "INFO" } },
-            "component": { "component": { "token": "opcua-adapter" } }
-        })
-    );
-}
 
-#[test]
-fn valid_catalog_with_no_base_vector() {
-    let case = vector_case("valid-catalog-with-no-base");
-    let catalog = Catalog::parse(
-        case["input"]["catalog"].clone(),
-        CatalogParseOptions::default(),
-    )
-    .unwrap();
-
-    assert!(catalog.base.is_none());
-    assert!(catalog.bundle_for("opcua-adapter").unwrap()["base"].is_null());
-}
-
-#[test]
-fn catalog_version_provenance_present_vector() {
-    let case = vector_case("catalog-version-provenance-present");
-    let catalog = Catalog::parse(
-        case["input"]["catalog"].clone(),
-        CatalogParseOptions::default(),
-    )
-    .unwrap();
-
-    assert_eq!(catalog.version, case["expected"]["version"]);
-    assert_eq!(
-        catalog.provenance["source"],
-        case["expected"]["provenanceSource"]
-    );
-}
-
-#[test]
-fn file_loaded_catalog_derives_version_vector() {
-    let case = vector_case("file-loaded-catalog-derives-version");
-    let source = &case["input"]["source"];
-    let catalog = Catalog::parse(
-        case["input"]["catalog"].clone(),
-        CatalogParseOptions {
-            derived_version: Some(source["contentHash"].as_str().unwrap().to_string()),
-            source_provenance: Some(Map::from_iter([
-                ("source".to_string(), source["type"].clone()),
-                ("uri".to_string(), source["uri"].clone()),
-            ])),
-            require_explicit_version: false,
-        },
-    )
-    .unwrap();
-
-    assert_eq!(catalog.version, source["contentHash"]);
-    assert_eq!(case["expected"]["derivedVersionRequired"], true);
-}
-
-#[test]
-fn invalid_catalog_vectors() {
-    for name in [
-        "invalid-missing-components",
-        "invalid-non-object-component-entry",
-    ] {
-        let case = vector_case(name);
-        let error = Catalog::parse(
-            case["input"]["catalog"].clone(),
-            CatalogParseOptions::default(),
-        )
-        .unwrap_err();
-        assert_eq!(error.code, CATALOG_INVALID);
-        assert_eq!(error.code, case["expected"]["error"].as_str().unwrap());
-    }
-}
-
-#[test]
-fn bad_request_missing_body_component_vector() {
-    let case = vector_case("bad-request-missing-body-component");
-    let coordinator = CatalogCoordinator::new(Arc::new(MemorySource::new(None)), "gw-01", true);
-
-    let reply = coordinator.bundle_for_request(&case["input"]["requestBody"]);
-
-    assert_eq!(reply["ok"], false);
-    assert_eq!(
-        reply["error"]["code"],
-        case["expected"]["reply"]["error"]["code"]
-    );
-}
-
-#[test]
-fn not_found_unknown_component_token_vector() {
-    let case = vector_case("not-found-unknown-component-token");
-    let coordinator = CatalogCoordinator::new(
-        Arc::new(MemorySource::new(Some(case["input"]["catalog"].clone()))),
-        "gw-01",
-        true,
-    );
-    assert!(coordinator.load_initial());
-
-    let reply = coordinator.bundle_for_request(&case["input"]["requestBody"]);
-
-    assert_eq!(reply["ok"], false);
-    assert_eq!(
-        reply["error"]["code"],
-        case["expected"]["reply"]["error"]["code"]
-    );
-}
-
-#[test]
-fn catalog_reload_push_bundle_for_every_component_vector() {
-    let case = vector_case("catalog-reload-push-bundle-for-every-component");
-    let coordinator = CatalogCoordinator::new(
-        Arc::new(MemorySource::new(Some(case["input"]["oldCatalog"].clone()))),
-        "gw-01",
-        true,
-    );
-    assert!(coordinator.load_initial());
-
-    let mut snap = snapshot(case["input"]["newCatalog"].clone());
-    snap.fingerprint = "new".to_string();
-    let pushes = coordinator.reload_from_source_snapshot(snap);
-
-    let topics = pushes
+    let body = catalog.lineage_for("opcua-adapter").unwrap();
+    assert_eq!(body["lineageVersion"], 1);
+    assert_eq!(body["catalogVersion"], case["expected"]["version"]);
+    assert_eq!(body["component"], "opcua-adapter");
+    assert!(body.get("base").is_none());
+    let ids = body["layers"]
+        .as_array()
+        .unwrap()
         .iter()
-        .map(|push| push.topic.as_str())
+        .map(|layer| layer["id"].as_str().unwrap())
         .collect::<Vec<_>>();
-    let expected = case["expected"]["pushTopics"]
+    let expected = case["expected"]["lineageIds"]
         .as_array()
         .unwrap()
         .iter()
         .map(Value::as_str)
         .map(Option::unwrap)
         .collect::<Vec<_>>();
-    assert_eq!(topics, expected);
+    assert_eq!(ids, expected);
+}
+
+#[test]
+fn valid_component_only_catalog_serves_one_layer() {
+    let case = valid_case("component-only-lineage");
+    let catalog = Catalog::parse(case["catalog"].clone(), CatalogParseOptions::default()).unwrap();
+
+    let body = catalog.lineage_for("opcua-adapter").unwrap();
+    assert_eq!(body["layers"].as_array().unwrap().len(), 1);
+    assert_eq!(body["layers"][0]["id"], "component/opcua-adapter");
+}
+
+#[test]
+fn invalid_catalog_vectors_return_expected_codes() {
+    for name in [
+        "old-split-catalog-with-base-is-invalid",
+        "missing-hierarchy",
+        "duplicate-hierarchy-level",
+        "device-in-catalog-scope",
+        "node-missing-scope",
+        "node-scope-does-not-own-node-id",
+        "unknown-parent",
+        "unreferenced-node-unknown-parent",
+        "cycle",
+        "unreferenced-node-cycle",
+        "scope-conflict",
+        "identity-conflict",
+    ] {
+        let case = invalid_case(name);
+        let error =
+            Catalog::parse(case["catalog"].clone(), CatalogParseOptions::default()).unwrap_err();
+        assert_eq!(
+            error.code,
+            case["expected"]["error"].as_str().unwrap(),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn bad_request_missing_body_component_returns_error_body() {
+    let coordinator =
+        CatalogCoordinator::new(Arc::new(MemorySource::new(None)), "line-7-edge-01", true);
+
+    let reply = coordinator.bundle_for_request(&json!({}));
+
+    assert_eq!(reply["ok"], false);
+    assert_eq!(reply["error"]["code"], "BAD_REQUEST");
+}
+
+#[test]
+fn unknown_component_token_returns_not_found() {
+    let case = valid_case("four-layer-line-with-one-device");
+    let coordinator = CatalogCoordinator::new(
+        Arc::new(MemorySource::new(Some(case["catalog"].clone()))),
+        "line-7-edge-01",
+        true,
+    );
+    assert!(coordinator.load_initial());
+
+    let reply = coordinator.bundle_for_request(&json!({ "component": "missing" }));
+
+    assert_eq!(reply["ok"], false);
+    assert_eq!(reply["error"]["code"], "CONFIG_NOT_FOUND");
+}
+
+#[test]
+fn catalog_reload_pushes_lineage_for_every_component() {
+    let initial = valid_case("four-layer-line-with-one-device");
+    let reload = valid_case("reload-relocates-line-and-pushes-all-components");
+    let coordinator = CatalogCoordinator::new(
+        Arc::new(MemorySource::new(Some(initial["catalog"].clone()))),
+        "line-7-edge-01",
+        true,
+    );
+    assert!(coordinator.load_initial());
+
+    let mut snap = snapshot(reload["newCatalog"].clone());
+    snap.fingerprint = "new".to_string();
+    let pushes = coordinator.reload_from_source_snapshot(snap);
+
+    assert_eq!(
+        pushes.len(),
+        reload["expected"]["pushCount"].as_u64().unwrap() as usize
+    );
     assert!(pushes
         .iter()
-        .all(|push| push.version == case["expected"]["pushedVersion"]));
-    assert_eq!(
-        pushes[0].body["base"],
-        json!({ "logging": { "level": "WARN" } })
-    );
+        .all(|push| push.version == "enterprise-site-zone-line-v2"));
+    assert!(pushes.iter().all(|push| push.body["lineageVersion"] == 1));
+    assert!(pushes.iter().all(|push| push.body.get("base").is_none()));
 }
 
 #[test]
-fn message_update_valid_full_replacement_vector() {
-    let case = vector_case("message-update-valid-full-replacement");
-    let source = Arc::new(MemorySource::new(Some(json!({
-        "schemaVersion": 1,
-        "version": "old",
-        "components": {}
-    }))));
+fn message_update_valid_full_replacement_is_volatile_and_pushes_lineages() {
+    let initial = valid_case("four-layer-line-with-one-device");
+    let reload = valid_case("reload-relocates-line-and-pushes-all-components");
+    let source = Arc::new(MemorySource::new(Some(initial["catalog"].clone())));
     let coordinator =
-        CatalogCoordinator::with_volatile_updates(source.clone(), "gw-01", true, true);
+        CatalogCoordinator::with_volatile_updates(source.clone(), "line-7-edge-01", true, true);
     assert!(coordinator.load_initial());
 
-    let result = coordinator.update_from_message(&case["input"]["updateBody"]);
+    let version = reload["newCatalog"]["version"].as_str().unwrap();
+    let result = coordinator.update_from_message(&json!({
+        "version": version,
+        "catalog": reload["newCatalog"].clone()
+    }));
 
     assert_eq!(result.ack["ok"], true);
-    assert_eq!(result.ack["version"], case["expected"]["ack"]["version"]);
+    assert_eq!(result.ack["version"], version);
     assert_eq!(result.ack["provenance"]["source"], "message");
     assert_eq!(result.ack["provenance"]["volatile"], true);
-    assert_eq!(
-        coordinator.active().unwrap().version,
-        case["expected"]["ack"]["version"].as_str().unwrap()
-    );
+    assert_eq!(result.pushes.len(), 2);
+    assert!(result
+        .pushes
+        .iter()
+        .all(|push| push.body["lineageVersion"] == 1));
+    assert_eq!(coordinator.active().unwrap().version, version);
 }
 
 #[test]
-fn message_update_disabled_by_default_rejects_and_keeps_current_vector() {
-    let case = vector_case("message-update-disabled-by-default-rejects-and-keeps-current");
-    let coordinator = CatalogCoordinator::new(
-        Arc::new(MemorySource::new(Some(json!({
-            "schemaVersion": 1,
-            "version": case["input"]["activeVersion"].clone(),
-            "components": {}
-        })))),
-        "gw-01",
-        true,
-    );
+fn message_update_overrides_payload_provenance_with_volatile_message_provenance() {
+    let initial = valid_case("four-layer-line-with-one-device");
+    let reload = valid_case("reload-relocates-line-and-pushes-all-components");
+    let source = Arc::new(MemorySource::new(Some(initial["catalog"].clone())));
+    let coordinator =
+        CatalogCoordinator::with_volatile_updates(source.clone(), "line-7-edge-01", true, true);
     assert!(coordinator.load_initial());
 
-    let result = coordinator.update_from_message(&case["input"]["updateBody"]);
-
-    assert_eq!(
-        result.ack["error"]["code"],
-        case["expected"]["ack"]["error"]["code"]
-    );
-    assert_eq!(
-        coordinator.active().unwrap().version,
-        case["expected"]["activeVersion"].as_str().unwrap()
-    );
-    assert!(result.pushes.is_empty());
-}
-
-#[test]
-fn message_update_invalid_catalog_rejects_and_keeps_current_vector() {
-    let case = vector_case("message-update-invalid-catalog-rejects-and-keeps-current");
-    let coordinator = CatalogCoordinator::with_volatile_updates(
-        Arc::new(MemorySource::new(Some(json!({
-            "schemaVersion": 1,
-            "version": case["input"]["activeVersion"].clone(),
-            "components": {}
-        })))),
-        "gw-01",
-        true,
-        true,
-    );
-    assert!(coordinator.load_initial());
-
-    let result = coordinator.update_from_message(&case["input"]["updateBody"]);
-
-    assert_eq!(
-        result.ack["error"]["code"],
-        case["expected"]["ack"]["error"]["code"]
-    );
-    assert_eq!(
-        coordinator.active().unwrap().version,
-        case["expected"]["activeVersion"].as_str().unwrap()
-    );
-    assert!(result.pushes.is_empty());
-}
-
-#[test]
-fn read_only_source_accepts_enabled_volatile_message_update_vector() {
-    let case = vector_case("read-only-source-accepts-enabled-volatile-message-update");
-    let coordinator = CatalogCoordinator::with_volatile_updates(
-        Arc::new(ReadOnlyCatalogSource::new(snapshot(json!({
-            "schemaVersion": 1,
-            "version": "old",
-            "components": {}
-        })))),
-        "gw-01",
-        true,
-        true,
-    );
-    assert!(coordinator.load_initial());
-
-    let result = coordinator.update_from_message(&case["input"]["updateBody"]);
+    let mut catalog = reload["newCatalog"].clone();
+    catalog["provenance"] = json!({
+        "source": "configmap",
+        "uri": "configmap://stale-copied-payload",
+        "volatile": false
+    });
+    let version = catalog["version"].as_str().unwrap();
+    let result = coordinator.update_from_message(&json!({
+        "version": version,
+        "catalog": catalog
+    }));
 
     assert_eq!(result.ack["ok"], true);
-    assert_eq!(result.ack["version"], case["expected"]["ack"]["version"]);
-    assert_eq!(coordinator.active().unwrap().version, "new");
+    assert_eq!(result.ack["provenance"]["source"], "message");
+    assert_eq!(result.ack["provenance"]["interface"], "update-catalog");
+    assert_eq!(result.ack["provenance"]["volatile"], true);
+    assert!(result.pushes.iter().all(|push| {
+        push.body["provenance"]["source"] == "message"
+            && push.body["provenance"]["interface"] == "update-catalog"
+            && push.body["provenance"]["volatile"] == true
+    }));
+    let active = coordinator.active().unwrap();
+    assert_eq!(active.provenance["source"], "message");
+    assert_eq!(active.raw["provenance"]["source"], "message");
+}
+
+#[test]
+fn message_update_disabled_by_default_rejects_and_keeps_current() {
+    let initial = valid_case("four-layer-line-with-one-device");
+    let reload = valid_case("reload-relocates-line-and-pushes-all-components");
+    let coordinator = CatalogCoordinator::new(
+        Arc::new(MemorySource::new(Some(initial["catalog"].clone()))),
+        "line-7-edge-01",
+        true,
+    );
+    assert!(coordinator.load_initial());
+
+    let result = coordinator.update_from_message(&json!({
+        "version": reload["newCatalog"]["version"].as_str().unwrap(),
+        "catalog": reload["newCatalog"].clone()
+    }));
+
+    assert_eq!(result.ack["ok"], false);
+    assert_eq!(result.ack["error"]["code"], "CATALOG_UPDATE_DISABLED");
+    assert_eq!(
+        coordinator.active().unwrap().version,
+        initial["catalog"]["version"]
+    );
+    assert!(result.pushes.is_empty());
+}
+
+#[test]
+fn invalid_message_update_rejects_and_keeps_current() {
+    let initial = valid_case("four-layer-line-with-one-device");
+    let invalid = invalid_case("old-split-catalog-with-base-is-invalid");
+    let coordinator = CatalogCoordinator::with_volatile_updates(
+        Arc::new(MemorySource::new(Some(initial["catalog"].clone()))),
+        "line-7-edge-01",
+        true,
+        true,
+    );
+    assert!(coordinator.load_initial());
+
+    let result = coordinator.update_from_message(&json!({
+        "version": "bad",
+        "catalog": invalid["catalog"].clone()
+    }));
+
+    assert_eq!(result.ack["ok"], false);
+    assert_eq!(result.ack["error"]["code"], "CATALOG_INVALID");
+    assert_eq!(
+        coordinator.active().unwrap().version,
+        initial["catalog"]["version"]
+    );
+    assert!(result.pushes.is_empty());
+}
+
+#[test]
+fn read_only_source_accepts_enabled_volatile_message_update() {
+    let initial = valid_case("four-layer-line-with-one-device");
+    let reload = valid_case("reload-relocates-line-and-pushes-all-components");
+    let coordinator = CatalogCoordinator::with_volatile_updates(
+        Arc::new(ReadOnlyCatalogSource::new(snapshot(
+            initial["catalog"].clone(),
+        ))),
+        "line-7-edge-01",
+        true,
+        true,
+    );
+    assert!(coordinator.load_initial());
+
+    let version = reload["newCatalog"]["version"].as_str().unwrap();
+    let result = coordinator.update_from_message(&json!({
+        "version": version,
+        "catalog": reload["newCatalog"].clone()
+    }));
+
+    assert_eq!(result.ack["ok"], true);
+    assert_eq!(result.ack["version"], version);
+    assert_eq!(coordinator.active().unwrap().version, version);
 }

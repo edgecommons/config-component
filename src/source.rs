@@ -11,8 +11,10 @@ use tokio::sync::mpsc;
 
 const FILE_PROVENANCE_SOURCE: &str = "file";
 const CONFIGMAP_PROVENANCE_SOURCE: &str = "configmap";
+const ENV_PROVENANCE_SOURCE: &str = "env";
 const DEFAULT_CONFIGMAP_MOUNT_DIR: &str = "/etc/edgecommons";
 const DEFAULT_CONFIGMAP_CATALOG_KEY: &str = "catalog.json";
+const DEFAULT_ENV_CATALOG_VAR: &str = "EDGECOMMONS_CONFIG_CATALOG";
 
 /// A raw snapshot loaded from a catalog source.
 #[derive(Debug, Clone, PartialEq)]
@@ -205,6 +207,103 @@ impl CatalogSource for ConfigMapCatalogSource {
     }
 }
 
+/// Read-only environment-variable catalog source.
+///
+/// The variable may contain inline JSON, or `@/path/to/catalog.json` to keep large catalog
+/// content out of process environment metadata. Environment sources do not support watch reloads.
+#[derive(Debug, Clone)]
+pub struct EnvCatalogSource {
+    var: String,
+}
+
+impl EnvCatalogSource {
+    pub fn new(var: impl Into<String>) -> Self {
+        Self { var: var.into() }
+    }
+
+    pub fn var(&self) -> &str {
+        &self.var
+    }
+}
+
+impl CatalogSource for EnvCatalogSource {
+    fn load(&self) -> anyhow::Result<SourceSnapshot> {
+        let raw = std::env::var(&self.var)
+            .with_context(|| format!("catalog environment variable {} is not set", self.var))?;
+        if raw.trim().is_empty() {
+            bail!(
+                "catalog environment variable {} must not be empty",
+                self.var
+            );
+        }
+
+        let (data, uri) = if let Some(path) = raw.strip_prefix('@') {
+            if path.is_empty() {
+                bail!(
+                    "catalog environment variable {} uses @path syntax with an empty path",
+                    self.var
+                );
+            }
+            let path = PathBuf::from(path);
+            (
+                fs::read(&path)
+                    .with_context(|| format!("failed to read catalog file {}", path.display()))?,
+                format!("env:{}@{}", self.var, path.display()),
+            )
+        } else {
+            (raw.into_bytes(), format!("env:{}", self.var))
+        };
+
+        let raw_catalog: Value = serde_json::from_slice(&data).with_context(|| {
+            format!(
+                "catalog environment variable {} is not valid JSON",
+                self.var
+            )
+        })?;
+        if !raw_catalog.is_object() {
+            bail!(
+                "catalog environment variable {} must contain a JSON object",
+                self.var
+            );
+        }
+        let fingerprint = content_fingerprint(&data);
+        let version = raw_catalog
+            .get("version")
+            .and_then(Value::as_str)
+            .filter(|version| !version.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| fingerprint.clone());
+        let provenance = raw_catalog
+            .get("provenance")
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_else(|| {
+                let mut provenance = Map::new();
+                provenance.insert(
+                    "source".to_string(),
+                    Value::String(ENV_PROVENANCE_SOURCE.to_string()),
+                );
+                provenance.insert("uri".to_string(), Value::String(uri));
+                provenance.insert(
+                    "contentHash".to_string(),
+                    Value::String(fingerprint.clone()),
+                );
+                provenance
+            });
+
+        Ok(SourceSnapshot {
+            raw_catalog,
+            version,
+            provenance,
+            fingerprint,
+        })
+    }
+
+    fn watch(&self) -> Option<mpsc::UnboundedReceiver<SourceSnapshot>> {
+        None
+    }
+}
+
 /// Read-only source useful for tests and future read-only backends.
 #[derive(Debug, Clone)]
 pub struct ReadOnlyCatalogSource {
@@ -254,8 +353,15 @@ pub fn source_from_descriptor(descriptor: &Value) -> anyhow::Result<Box<dyn Cata
             };
             Ok(Box::new(source))
         }
+        "env" => {
+            if watch {
+                bail!("env catalog source does not support watch");
+            }
+            let var = optional_string(object, "var")?.unwrap_or(DEFAULT_ENV_CATALOG_VAR);
+            Ok(Box::new(EnvCatalogSource::new(var)))
+        }
         other => bail!(
-            "unsupported catalogSource.type '{other}'; supported values are 'file' and 'configmap'"
+            "unsupported catalogSource.type '{other}'; supported values are 'file', 'configmap', and 'env'"
         ),
     }
 }

@@ -10,12 +10,38 @@ It bootstraps from the component's own non-`CONFIG_COMPONENT` config source, loa
 - `ecv1/{device}/config/main/cmd/get-configuration`
 - `ecv1/{device}/config/main/cmd/update-catalog`
 
-Successful GET replies are raw layer bundles:
+Successful GET replies are raw lineage bundles:
 
 ```json
 {
-  "base": { "logging": { "level": "INFO" } },
-  "component": { "component": { "token": "opcua-adapter" } }
+  "lineageVersion": 1,
+  "catalogVersion": "2026-07-08T00:00:00Z",
+  "component": "opcua-adapter",
+  "layers": [
+    {
+      "id": "enterprise/acme",
+      "kind": "scope",
+      "scope": { "enterprise": "acme" },
+      "config": { "logging": { "level": "INFO" } }
+    },
+    {
+      "id": "line/line-7",
+      "kind": "scope",
+      "scope": {
+        "enterprise": "acme",
+        "site": "integration-lab",
+        "zone": "assembly",
+        "line": "line-7"
+      },
+      "config": { "component": { "global": { "pollIntervalMs": 1000 } } }
+    },
+    {
+      "id": "component/opcua-adapter",
+      "kind": "component",
+      "component": "opcua-adapter",
+      "config": { "component": { "token": "opcua-adapter" } }
+    }
+  ]
 }
 ```
 
@@ -39,7 +65,8 @@ The crate depends on the sibling Rust library through a path dependency:
 
 ## Catalog Source
 
-v1 supports JSON catalogs from a local file or a Kubernetes ConfigMap-mounted file:
+v1 supports JSON catalogs from a local file, a Kubernetes ConfigMap-mounted file, or an
+environment variable:
 
 ```json
 {
@@ -74,10 +101,14 @@ Supported source descriptors:
 { "type": "configmap", "mountDir": "/etc/edgecommons", "key": "catalog.json", "watch": true }
 ```
 
-File and ConfigMap-loaded catalogs may omit `version` and `provenance`; the source derives them
-from the content hash and path. ConfigMap is read/watch only. Kubernetes updates the ConfigMap; the
-ConfigComponent observes the mounted file change, updates its active cache, and serves the new
-catalog. The component does not write back to a ConfigMap.
+```json
+{ "type": "env", "name": "EDGECOMMONS_CONFIG_CATALOG" }
+```
+
+File, ConfigMap, and environment-loaded catalogs may omit `version` and `provenance`; the source
+derives them from the content hash and source identity. ConfigMap is read/watch only. Kubernetes
+updates the ConfigMap; the ConfigComponent observes the mounted file change, updates its active
+cache, and serves the new catalog. The component does not write back to a ConfigMap.
 
 Message updates are complete catalog replacements delivered to
 `ecv1/{device}/config/main/cmd/update-catalog`. The request body contains `version` and `catalog`,
@@ -85,7 +116,15 @@ and the two versions must match. This interface is disabled by default and is in
 debug, verification, and test environments. Enable it with:
 
 ```json
-{ "allowVolatileCatalogUpdates": true }
+{
+  "component": {
+    "global": {
+      "configComponent": {
+        "allowVolatileCatalogUpdates": true
+      }
+    }
+  }
+}
 ```
 
 When enabled, the component validates the replacement, promotes it only to the active in-memory
