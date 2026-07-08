@@ -1,0 +1,14 @@
+**
+!core/
+!core/libs/
+!core/libs/rust/
+!core/libs/rust/**
+!core/proto/
+!core/proto/**
+!config-component/
+!config-component/Cargo.toml
+!config-component/Cargo.lock
+!config-component/src/
+!config-component/src/**
+!config-component/test-configs/
+!config-component/test-configs/**
