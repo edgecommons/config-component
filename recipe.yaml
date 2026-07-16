@@ -47,6 +47,7 @@ ComponentConfiguration:
             - "ecv1/*/config/cmd/get-configuration"
             - "ecv1/*/config/cmd/update-catalog"
             - "ecv1/*/edgecommons-config-component/cmd/*"
+            - "ecv1/*/edgecommons-config-component/*/cmd/*"
             - "ecv1/*/_bcast/cmd/*"
         "com.mbreissi.edgecommons.ConfigComponent:config-server-publish:1":
           policyDescription: Allows the config server to reply, push bundles, and publish its own state.
