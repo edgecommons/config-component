@@ -7,8 +7,8 @@ It bootstraps from the component's own non-`CONFIG_COMPONENT` config source, loa
 `component.global.configComponent.catalogSource`, and manually serves the reserved
 `CONFIG_COMPONENT` rendezvous:
 
-- `ecv1/{device}/config/main/cmd/get-configuration`
-- `ecv1/{device}/config/main/cmd/update-catalog`
+- `ecv1/{device}/config/cmd/get-configuration`
+- `ecv1/{device}/config/cmd/update-catalog`
 
 Successful GET replies are raw lineage bundles:
 
@@ -111,7 +111,7 @@ updates the ConfigMap; the ConfigComponent observes the mounted file change, upd
 cache, and serves the new catalog. The component does not write back to a ConfigMap.
 
 Message updates are complete catalog replacements delivered to
-`ecv1/{device}/config/main/cmd/update-catalog`. The request body contains `version` and `catalog`,
+`ecv1/{device}/config/cmd/update-catalog`. The request body contains `version` and `catalog`,
 and the two versions must match. This interface is disabled by default and is intended only for
 debug, verification, and test environments. Enable it with:
 

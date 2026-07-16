@@ -127,9 +127,9 @@ invalid.
 
 ## Request And Update Topics
 
-- GET: `ecv1/{device}/config/main/cmd/get-configuration`
-- update: `ecv1/{device}/config/main/cmd/update-catalog`
-- push: `ecv1/{device}/{component}/main/cmd/set-config`
+- GET: `ecv1/{device}/config/cmd/get-configuration`
+- update: `ecv1/{device}/config/cmd/update-catalog`
+- push: `ecv1/{device}/{component}/cmd/set-config`
 
 All messages use the normal EdgeCommons message envelope. The server reads a raw JSON body when one
 is present, otherwise it reads the structured message body. If a request has `reply_to`, the server
@@ -252,10 +252,10 @@ Failures keep the previous active catalog and do not push `set-config`.
 The recipe grants the server only the protocol topics it needs. These are Greengrass IPC authorization
 resource patterns, so they use Greengrass `*` matching instead of MQTT `+` or `#` wildcards:
 
-- subscribe to `ecv1/*/config/main/cmd/get-configuration`
-- subscribe to `ecv1/*/config/main/cmd/update-catalog`
+- subscribe to `ecv1/*/config/cmd/get-configuration`
+- subscribe to `ecv1/*/config/cmd/update-catalog`
 - publish replies to `edgecommons/reply-*`
-- publish pushes to `ecv1/*/*/main/cmd/set-config`
+- publish pushes to `ecv1/*/*/cmd/set-config`
 - publish its own `state` and `cfg`
 
 Publishing to `update-catalog` is administrative and non-production. Ordinary consumer components
