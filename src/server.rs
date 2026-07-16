@@ -14,8 +14,8 @@ use crate::tokens::sanitize_token;
 
 pub const COMPONENT_NAME: &str = "com.mbreissi.edgecommons.ConfigComponent";
 pub const DEFAULT_COMPONENT_TOKEN: &str = "edgecommons-config-component";
-pub const GET_TOPIC_TEMPLATE: &str = "ecv1/{device}/config/main/cmd/get-configuration";
-pub const UPDATE_TOPIC_TEMPLATE: &str = "ecv1/{device}/config/main/cmd/update-catalog";
+pub const GET_TOPIC_TEMPLATE: &str = "ecv1/{device}/config/cmd/get-configuration";
+pub const UPDATE_TOPIC_TEMPLATE: &str = "ecv1/{device}/config/cmd/update-catalog";
 
 const SUBSCRIPTION_QUEUE_SIZE: usize = 16;
 const SERIAL_CONCURRENCY: usize = 1;

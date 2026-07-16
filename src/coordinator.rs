@@ -254,7 +254,7 @@ impl CatalogCoordinator {
             .lineages()
             .into_iter()
             .map(|(token, body)| PushBundle {
-                topic: format!("ecv1/{}/{token}/main/cmd/set-config", self.device_token),
+                topic: format!("ecv1/{}/{token}/cmd/set-config", self.device_token),
                 body,
                 version: catalog.version.clone(),
             })
