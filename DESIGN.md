@@ -66,7 +66,22 @@ device seam (see D-CC-8).
   so a standalone clone and single-repo CI could not run the suite. The vectors are vendored into
   `tests/vectors/catalogs.json` (a verbatim copy). When the canonical vectors change, re-copy the file —
   do not edit the vendored copy in place. This keeps the repo genuinely standalone-testable (the intent
-  of D-CC-1) without forking the conformance contract.
+  of D-CC-1) without forking the conformance contract. A drift guard
+  (`vendored_vectors_match_canonical_source` in `catalog_vectors.rs`) byte-compares the copy against the
+  canonical core source whenever that source is reachable (in the umbrella workspace) and self-skips in a
+  standalone clone / CI — so divergence is caught mechanically, not only by this prose.
+
+- **D-CC-9. Coverage exclusion is a thin live seam only; pure helpers factored out.** The 90% gate
+  excludes only `server.rs` (the messaging subscribe/publish/reply wiring) and `main.rs` (the bootstrap
+  shim). The pure helpers that used to live in `server.rs` — `reject_recursive_bootstrap`,
+  `optional_bool`, `message_body` — are factored into `src/bootstrap.rs`, which is INCLUDED in the
+  denominator and unit-tested to 100%, so no tested logic is excluded.
+
+- **D-CC-10. Docker rustc floor.** The `Dockerfile` build stage is `rust:1.96-slim`. The pinned
+  `edgecommons` rev's locked dependency tree needs rustc >= 1.86 (the `icu_*@2.2.0` transitive crates
+  reject 1.85), verified by a failing `rust:1.85-slim` build; 1.96 is pinned to match the sibling Rust
+  components' base. The crate's own `rust-version = "1.85"` (its source MSRV) is unchanged, matching the
+  sibling convention. Bump the base in lockstep when the pinned rev raises its toolchain floor.
 
 - **D-CC-8. License is BUSL-1.1.** `Cargo.toml` `license`, the README, and `LICENSE` all state BUSL-1.1;
   the earlier `Cargo.toml license = "Apache-2.0"` metadata mismatch (tracked as #2) is fixed. *(closes #2)*
