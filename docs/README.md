@@ -29,5 +29,17 @@ Catalog updates through the message interface are volatile and intended for debu
 test environments. They are disabled by default, never write back to the file or ConfigMap source,
 and do not survive a restart.
 
-See the [ConfigComponent reference](reference/config-component.md) for the bootstrap schema,
-catalog format, request/reply topics, update behavior, and Greengrass IPC permissions.
+## Documentation
+
+- [Tutorial](tutorial.md) — run the server locally, serve a lineage bundle, watch a hot reload.
+- [How-to guides](how-to-guides.md) — task recipes: pick a catalog source, enable volatile updates,
+  deploy on Greengrass and Kubernetes.
+- [Explanation](explanation.md) — why the server serves unmerged layers and rejects-and-keeps.
+- [Sample configurations](sample-configurations.md) — the shipped `test-configs/` and non-trivial
+  variants, explained.
+- Reference:
+  - [Configuration](reference/configuration.md) — bootstrap config, catalog source descriptors, and
+    the catalog format.
+  - [Messaging interface](reference/messaging-interface.md) — request/update/push topics, bodies,
+    replies, error codes, CLI, and Greengrass IPC permissions.
+  - [Metrics](reference/metrics.md) — the library envelope this service emits.
