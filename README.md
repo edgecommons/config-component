@@ -59,9 +59,19 @@ cargo run -- \
   -t gw-01
 ```
 
-The crate depends on the sibling Rust library through a path dependency:
+The crate pins the `edgecommons` Rust library by git rev in `Cargo.toml`, so it builds from a standalone
+clone. For local development against a sibling `core/libs/rust` checkout, add a gitignored
+`.cargo/config.toml`:
 
-`edgecommons = { path = "../core/libs/rust", default-features = false }`
+```toml
+[patch."https://github.com/edgecommons/edgecommons.git"]
+edgecommons = { path = "../core/libs/rust" }
+
+[net]
+git-fetch-with-cli = true
+```
+
+CI never sees that file, so it resolves the committed pin. `Cargo.lock` is committed (git-sourced).
 
 ## Catalog Source
 
@@ -143,3 +153,7 @@ gdk component build
 
 On Windows, build and test the default standalone feature locally with `cargo test` and `cargo build`.
 The Greengrass IPC feature remains Linux-only because the Greengrass IPC SDK is Linux-only.
+
+## License
+
+Business Source License 1.1 (BUSL-1.1). See [LICENSE](LICENSE).

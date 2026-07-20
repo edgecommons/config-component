@@ -3,7 +3,7 @@ name = "config-component"
 version = "1.0.0"
 edition = "2021"
 rust-version = "1.85"
-license = "Apache-2.0"
+license = "BUSL-1.1"
 description = "Dedicated EdgeCommons hierarchical-configuration catalog server"
 publish = false
 
@@ -17,7 +17,13 @@ standalone = ["edgecommons/standalone"]
 greengrass = ["edgecommons/greengrass"]
 
 [dependencies]
-edgecommons = { path = "../core/libs/rust", default-features = false }
+# edgecommons Rust library, pinned to a commit on edgecommons/edgecommons (private). Building standalone
+# needs read access to that repo. The fetch goes through the git CLI (see .cargo/config.toml); locally use
+# your gh/git credential helper, and CI's reusable workflow rewrites the https URL with EDGECOMMONS_READ_TOKEN.
+# LOCAL DEV may still build against the sibling checkout via the gitignored `.cargo/config.toml` `[patch]`
+# override, which replaces this source outright. The pin points at the current core `main` rev the sibling
+# components use.
+edgecommons = { git = "https://github.com/edgecommons/edgecommons.git", rev = "36a70c48b65b35f77bfab70d3a73869debdfc407", default-features = false }
 anyhow = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
