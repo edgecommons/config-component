@@ -8,8 +8,11 @@ use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
 fn vectors() -> Value {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../core/hierarchical-config-test-vectors/catalogs.json");
+    // Vendored copy of the shared cross-language conformance vectors that live canonically in the
+    // core repo at `core/hierarchical-config-test-vectors/catalogs.json`. Vendored so this repo's
+    // `cargo test` runs from a standalone clone and in single-repo CI (there is no `../core/` there).
+    // When the canonical vectors change, re-copy this file — do not edit it in place.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/catalogs.json");
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
 }
 
