@@ -604,7 +604,7 @@ fn validate_string_map(
                 format!("Catalog {context} key '{key}' is not in hierarchy.levels"),
             ));
         }
-        if !value.as_str().is_some_and(|value| !value.is_empty()) {
+        if value.as_str().is_none_or(|value| value.is_empty()) {
             return Err(CatalogError::new(
                 CATALOG_INVALID,
                 format!("Catalog {context}.{key} must be a non-empty string"),

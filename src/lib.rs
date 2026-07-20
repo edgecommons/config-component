@@ -4,6 +4,7 @@
 //! separate so the v1 file source can be replaced later without changing request
 //! handling.
 
+pub mod bootstrap;
 pub mod catalog;
 pub mod coordinator;
 pub mod server;

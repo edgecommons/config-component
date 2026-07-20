@@ -8,9 +8,42 @@ use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
 fn vectors() -> Value {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../core/hierarchical-config-test-vectors/catalogs.json");
+    // Vendored copy of the shared cross-language conformance vectors that live canonically in the
+    // core repo at `core/hierarchical-config-test-vectors/catalogs.json`. Vendored so this repo's
+    // `cargo test` runs from a standalone clone and in single-repo CI (there is no `../core/` there).
+    // When the canonical vectors change, re-copy this file — do not edit it in place. The
+    // `vendored_vectors_match_canonical_source` test below guards against drift whenever the canonical
+    // source is reachable (i.e. inside the umbrella workspace).
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/catalogs.json");
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+/// Drift-guard for the vendored conformance vectors (DESIGN §D-CC-7).
+///
+/// When the canonical source is reachable — inside the EdgeCommons umbrella workspace, where
+/// `../core/hierarchical-config-test-vectors/catalogs.json` exists — assert the vendored copy is
+/// byte-for-byte identical, so a divergence is caught the moment the canonical vectors change rather
+/// than only by prose. In a standalone clone / single-repo CI the canonical path is absent and the
+/// check self-skips (the vendored copy is authoritative there).
+#[test]
+fn vendored_vectors_match_canonical_source() {
+    let canonical = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../core/hierarchical-config-test-vectors/catalogs.json");
+    if !canonical.exists() {
+        eprintln!(
+            "skipping vendored-vectors drift guard: canonical source not present (standalone clone / CI)"
+        );
+        return;
+    }
+    let vendored =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/vectors/catalogs.json");
+    let canonical_bytes = std::fs::read(&canonical).unwrap();
+    let vendored_bytes = std::fs::read(&vendored).unwrap();
+    assert_eq!(
+        vendored_bytes, canonical_bytes,
+        "tests/vectors/catalogs.json has drifted from the canonical \
+         core/hierarchical-config-test-vectors/catalogs.json — re-copy it (DESIGN §D-CC-7)"
+    );
 }
 
 fn valid_case(name: &str) -> Value {

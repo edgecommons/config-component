@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.edgecommons.mbreissi.com/schemas/config-component/config.schema.json",
+  "title": "config-component component configuration",
+  "description": "The configuration config-component (com.mbreissi.edgecommons.ConfigComponent) itself understands: the object at `component.global` in an EdgeCommons config file — its own bootstrap config, which points at the hierarchy catalog it serves. The library envelope (logging, messaging, metricEmission, heartbeat, health, hierarchy, identity, topic, tags) is owned by the canonical schema (schema/edgecommons-config-schema.json) and is deliberately NOT redeclared here. This component reads no per-instance config: `component.instances[]` is always empty.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["configComponent"],
+  "properties": {
+    "configComponent": {
+      "title": "ConfigComponent server settings",
+      "description": "The dedicated config server's own settings. Present in the component's own bootstrap config (FILE/ENV/GG_CONFIG/CONFIGMAP); it is not a catalog entry and is never returned to other components.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalogSource"],
+      "properties": {
+        "catalogSource": { "$ref": "#/$defs/catalogSource" },
+        "pushOnCatalogReload": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true (default), the server publishes a complete `set-config` lineage bundle to every catalog component whenever it promotes a new catalog (a source-side reload or an accepted volatile update)."
+        },
+        "allowVolatileCatalogUpdates": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, the `update-catalog` message interface is enabled: a complete in-memory catalog replacement for debug/verification/test. Volatile — never written back to the source and gone on restart. Keep false in production."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "catalogSource": {
+      "title": "Catalog source descriptor",
+      "description": "Where the server loads its hierarchy catalog from. Exactly one of the file / configmap / env shapes.",
+      "type": "object",
+      "required": ["type"],
+      "oneOf": [
+        {
+          "title": "Local JSON file source",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "path"],
+          "properties": {
+            "type": { "const": "file" },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Absolute or working-directory-relative path to the JSON catalog file."
+            },
+            "watch": {
+              "type": "boolean",
+              "default": false,
+              "description": "Poll the file for content changes and hot-promote a new catalog when it changes."
+            }
+          }
+        },
+        {
+          "title": "Kubernetes ConfigMap-mounted file source (read/watch only)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "configmap" },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Full path to the mounted catalog file. Mutually exclusive with mountDir/key; when present it wins."
+            },
+            "mountDir": {
+              "type": "string",
+              "minLength": 1,
+              "default": "/etc/edgecommons",
+              "description": "ConfigMap mount directory. Used with `key` when `path` is absent."
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "default": "catalog.json",
+              "description": "ConfigMap data key (a bare file name, not a path) joined onto `mountDir`."
+            },
+            "watch": {
+              "type": "boolean",
+              "default": false,
+              "description": "Observe the kubelet ..data swap and hot-promote a new catalog. The server never writes back to the ConfigMap."
+            }
+          }
+        },
+        {
+          "title": "Environment-variable source (snapshot only)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "env" },
+            "var": {
+              "type": "string",
+              "minLength": 1,
+              "default": "EDGECOMMONS_CONFIG_CATALOG",
+              "description": "Name of the environment variable holding either inline catalog JSON or `@/path/to/catalog.json`. Environment sources do not support watch."
+            }
+          }
+        }
+      ]
+    },
+    "instance": {
+      "title": "config-component instance configuration",
+      "description": "config-component reads no per-instance config; `component.instances[]` is always empty. This definition exists for baseline uniformity with `edgecommons component validate`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique instance identifier."
+        }
+      }
+    }
+  }
+}

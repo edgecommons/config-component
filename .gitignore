@@ -4,3 +4,7 @@ greengrass-build/
 *.metric.log
 .pytest_cache/
 .venv/
+
+# Local-dev override: point edgecommons at the sibling libs/rust instead of the pinned git rev.
+# Gitignored so CI uses the git rev; see the org CLAUDE.md "Local-dev notes".
+/.cargo/

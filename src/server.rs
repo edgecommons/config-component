@@ -1,12 +1,12 @@
 //! Runtime server for the dedicated ConfigComponent.
 
-use std::ffi::OsString;
 use std::sync::Arc;
 
 use edgecommons::messaging::{message_handler, Message, MessageBuilder};
 use edgecommons::prelude::*;
 use serde_json::Value;
 
+use crate::bootstrap::{message_body, optional_bool};
 use crate::catalog::is_error_body;
 use crate::coordinator::{CatalogCoordinator, PushBundle};
 use crate::source::{source_from_descriptor, CatalogSource};
@@ -19,36 +19,6 @@ pub const UPDATE_TOPIC_TEMPLATE: &str = "ecv1/{device}/config/cmd/update-catalog
 
 const SUBSCRIPTION_QUEUE_SIZE: usize = 16;
 const SERIAL_CONCURRENCY: usize = 1;
-
-/// Fail fast if this component tries to bootstrap from itself.
-pub fn reject_recursive_bootstrap<I, T>(args: I) -> anyhow::Result<()>
-where
-    I: IntoIterator<Item = T>,
-    T: Into<OsString>,
-{
-    let values = args
-        .into_iter()
-        .map(|arg| arg.into().to_string_lossy().to_string())
-        .collect::<Vec<_>>();
-
-    for (index, arg) in values.iter().enumerate() {
-        let token = if matches!(arg.as_str(), "-c" | "--config") {
-            values.get(index + 1).map(String::as_str)
-        } else if let Some(value) = arg.strip_prefix("--config=") {
-            Some(value)
-        } else {
-            arg.strip_prefix("-c").filter(|value| !value.is_empty())
-        };
-
-        if token.is_some_and(|value| value.eq_ignore_ascii_case("CONFIG_COMPONENT")) {
-            anyhow::bail!(
-                "com.mbreissi.edgecommons.ConfigComponent cannot bootstrap from CONFIG_COMPONENT; use GG_CONFIG, FILE, ENV, or CONFIGMAP"
-            );
-        }
-    }
-
-    Ok(())
-}
 
 /// Subscribes to the CONFIG_COMPONENT rendezvous and serves catalog bundles.
 pub struct ConfigComponentServer {
@@ -194,21 +164,6 @@ impl ConfigComponentServer {
     }
 }
 
-fn optional_bool(object: &Value, field: &str, default: bool) -> anyhow::Result<bool> {
-    object.get(field).map_or(Ok(default), |value| {
-        value.as_bool().ok_or_else(|| {
-            anyhow::anyhow!("component.global.configComponent.{field} must be a boolean")
-        })
-    })
-}
-
-fn message_body(message: &Message) -> Value {
-    message
-        .get_raw()
-        .cloned()
-        .unwrap_or_else(|| message.body.clone())
-}
-
 async fn reply_if_requested(
     messaging: &Arc<dyn MessagingService>,
     config: &Config,
@@ -249,27 +204,5 @@ async fn publish_pushes(
                 "failed to push catalog bundle"
             ),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rejects_config_component_bootstrap_forms() {
-        assert!(
-            reject_recursive_bootstrap(["config-component", "-c", "CONFIG_COMPONENT"]).is_err()
-        );
-        assert!(
-            reject_recursive_bootstrap(["config-component", "--config=CONFIG_COMPONENT"]).is_err()
-        );
-        assert!(reject_recursive_bootstrap(["config-component", "-cCONFIG_COMPONENT"]).is_err());
-    }
-
-    #[test]
-    fn allows_non_recursive_bootstrap_sources() {
-        reject_recursive_bootstrap(["config-component", "-c", "FILE", "config.json"]).unwrap();
-        reject_recursive_bootstrap(["config-component", "--platform", "GREENGRASS"]).unwrap();
     }
 }
