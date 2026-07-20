@@ -43,17 +43,21 @@ sample catalog.
 
 ## Validation expectations
 
-- `cargo test` covers the pure logic (catalog parsing/lineage, the catalog sources + descriptor
-  factory, the coordinator's promote/serve/update/reload) directly — no broker required. The
-  `catalog_vectors.rs` suite runs the shared cross-language conformance vectors, vendored into
-  `tests/vectors/catalogs.json` so the suite runs from a standalone clone (see DESIGN §D-CC-7).
+- `cargo test` covers the pure logic (the bootstrap/config helpers, catalog parsing/lineage, the
+  catalog sources + descriptor factory, the coordinator's promote/serve/update/reload) directly — no
+  broker required. The `catalog_vectors.rs` suite runs the shared cross-language conformance vectors,
+  vendored into `tests/vectors/catalogs.json` so the suite runs from a standalone clone (see DESIGN
+  §D-CC-7); its `vendored_vectors_match_canonical_source` test byte-compares the copy against the
+  canonical core source whenever that source is reachable (in the umbrella) and self-skips otherwise.
 - `cargo llvm-cov --fail-under-lines 90` is the coverage gate (`.github/workflows/ci.yml`'s `coverage`
   job) — the org rule is 90% line coverage per language. The coverage job passes
-  `--ignore-filename-regex '(server|main)\.rs'` to exclude ONLY the messaging runtime seam
-  (`server.rs`'s subscribe/publish/reply wiring + `main.rs`'s bootstrap shim), which needs a live
-  `EdgeCommons` runtime + broker and is exercised by the scaffold→build gate and HOST/Greengrass smoke.
-  All pure logic stays IN the denominator. Do not lower the gate or exclude testable code to pass it —
-  add tests.
+  `--ignore-filename-regex '(server|main)\.rs'` to exclude ONLY the thin live-runtime seam:
+  `server.rs`'s subscribe/publish/reply wiring and `main.rs`'s bootstrap shim, both of which need a live
+  `EdgeCommons` runtime + broker and are exercised by the scaffold→build gate and HOST/Greengrass smoke.
+  The pure helpers server.rs used to hold (`reject_recursive_bootstrap`, `optional_bool`, `message_body`)
+  are factored into `src/bootstrap.rs`, which is INCLUDED and unit-tested to 100% — no tested logic is
+  excluded. All pure logic stays IN the denominator. Do not lower the gate or exclude testable code to
+  pass it — add tests.
 - `edgecommons component validate` checks this repo's config against `config.schema.json` and warns if
   `Cargo.lock` is not committed (it is committed here, git-sourced).
 - A **fresh-clone build proof** — `cargo build --locked` + `cargo test --locked` with the local

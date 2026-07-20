@@ -21,17 +21,20 @@ jobs:
 
   coverage:
     # The 90% line-coverage gate (org rule; the reusable component-ci only does build/test/clippy),
-    # actually RUN here. Excluded from the denominator: the messaging runtime seam, each pinned to a
-    # reason —
+    # actually RUN here. Excluded from the denominator: ONLY the thin live-runtime seam that needs a
+    # live `EdgeCommons` runtime + broker, each file pinned to a reason —
     #   - `src/server.rs` — the CONFIG_COMPONENT subscription wiring (`from_runtime`, `start`/`stop`,
     #     the two async request handlers, `reply_if_requested`, `publish_pushes`, `start_source_watch`).
-    #     It `.await`s `messaging.subscribe/publish/reply` and needs a live `EdgeCommons` runtime +
-    #     broker; it is validated by the scaffold→build gate and HOST/Greengrass smoke, not unit tests.
+    #     Every remaining line `.await`s `messaging.subscribe/publish/reply` or the runtime; it is
+    #     validated by the scaffold→build gate and HOST/Greengrass smoke, not unit tests. The pure
+    #     helpers this file used to hold (`reject_recursive_bootstrap`, `optional_bool`, `message_body`)
+    #     are factored into `src/bootstrap.rs`, which is INCLUDED and unit-tested to 100% — no tested
+    #     logic is excluded.
     #   - `src/main.rs` — the binary bootstrap shim (build the runtime, hand off to the server).
-    # ALL pure logic — catalog parsing/lineage (`catalog.rs`), the three catalog sources + descriptor
-    # factory (`source.rs`), the coordinator's promote/serve/update/reload logic (`coordinator.rs`),
-    # and token handling (`tokens.rs`) — stays IN the denominator and is unit-tested to the floor.
-    # Do NOT lower this gate or exclude testable code to pass it — add tests.
+    # ALL pure logic — bootstrap helpers (`bootstrap.rs`), catalog parsing/lineage (`catalog.rs`), the
+    # three catalog sources + descriptor factory (`source.rs`), the coordinator's promote/serve/update/
+    # reload logic (`coordinator.rs`), and token handling (`tokens.rs`) — stays IN the denominator and
+    # is unit-tested to the floor. Do NOT lower this gate or exclude testable code to pass it — add tests.
     runs-on: ubuntu-latest
     permissions:
       contents: read

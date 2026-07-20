@@ -1,6 +1,7 @@
 //! Entry point for `com.mbreissi.edgecommons.ConfigComponent`.
 
-use config_component::server::{reject_recursive_bootstrap, ConfigComponentServer, COMPONENT_NAME};
+use config_component::bootstrap::reject_recursive_bootstrap;
+use config_component::server::{ConfigComponentServer, COMPONENT_NAME};
 use edgecommons::prelude::*;
 
 #[tokio::main]
