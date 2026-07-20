@@ -1,0 +1,65 @@
+# Bootstrap config + served catalog for the ConfigComponent on Kubernetes, mounted as a DIRECTORY at
+# /etc/edgecommons so the CONFIGMAP config source and the `configmap`-type catalogSource both watch the
+# kubelet ..data swap and hot-reload in-process (no restart). `config.json` is the component's own
+# bootstrap config (its catalogSource points at the sibling `catalog.json` key); `catalog.json` is the
+# hierarchy catalog this server hands out. Edit either and `kubectl apply -f k8s/` to drive a hot reload.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-component-config
+  labels:
+    app.kubernetes.io/name: config-component
+data:
+  config.json: |-
+    {
+      "component": {
+        "token": "edgecommons-config-component",
+        "global": {
+          "configComponent": {
+            "catalogSource": {
+              "type": "configmap",
+              "mountDir": "/etc/edgecommons",
+              "key": "catalog.json",
+              "watch": true
+            },
+            "pushOnCatalogReload": true,
+            "allowVolatileCatalogUpdates": false
+          }
+        },
+        "instances": []
+      },
+      "messaging": {
+        "local": {
+          "type": "mqtt",
+          "host": "emqx.default.svc.cluster.local",
+          "port": 1883,
+          "clientId": "edgecommons-config-component"
+        }
+      },
+      "logging": {
+        "level": "INFO"
+      }
+    }
+  catalog.json: |-
+    {
+      "schemaVersion": 1,
+      "version": "k8s-sample-1",
+      "hierarchy": { "levels": ["enterprise", "site", "zone", "line", "device"] },
+      "nodes": {
+        "enterprise/acme": {
+          "scope": { "enterprise": "acme" },
+          "config": { "identity": { "enterprise": "acme" }, "logging": { "level": "INFO" } }
+        },
+        "line/line-7": {
+          "parent": "enterprise/acme",
+          "scope": { "enterprise": "acme", "line": "line-7" },
+          "config": { "identity": { "line": "line-7" } }
+        }
+      },
+      "components": {
+        "opcua-adapter": {
+          "parent": "line/line-7",
+          "config": { "component": { "token": "opcua-adapter", "global": { "endpoint": "opc.tcp://plc-1:4840" } } }
+        }
+      }
+    }
