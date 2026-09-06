@@ -2,7 +2,7 @@
 
 Every topic the ConfigComponent serves or publishes, the request/reply bodies, the error codes, the CLI
 flags, and the Greengrass IPC permissions. Addressing follows the **Unified Namespace (UNS)**:
-`ecv1/{device}/{component}/{instance}/{class}[/channel]`.
+`ecv1/{device}/{component}[/{instance}]/{class}[/channel]`.
 
 ## Topics
 
@@ -12,8 +12,9 @@ flags, and the Greengrass IPC permissions. Addressing follows the **Unified Name
 | `cmd` | `update-catalog` | bus → server | `ecv1/{device}/config/cmd/update-catalog` | `CatalogUpdateAck` or error |
 | `cmd` | `set-config` | server → component | `ecv1/{device}/{component}/cmd/set-config` | — |
 
-`{device}` is the resolved Thing name. The server reads a raw JSON body when one is present, otherwise the
-structured message body. If a request carries `reply_to`, the server replies; otherwise it processes the
+`{device}` is the resolved Thing name. Normal MQTT and Greengrass IPC requests carry protobuf bytes;
+the server reads the decoded message body. The JSON objects below are native request/reply body
+shapes, not complete wire envelopes. If a request carries `header.reply_to`, the server replies; otherwise it processes the
 request without an acknowledgement.
 
 ## `get-configuration`
