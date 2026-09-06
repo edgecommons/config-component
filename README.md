@@ -10,7 +10,8 @@ It bootstraps from the component's own non-`CONFIG_COMPONENT` config source, loa
 - `ecv1/{device}/config/cmd/get-configuration`
 - `ecv1/{device}/config/cmd/update-catalog`
 
-Successful GET replies are raw lineage bundles:
+Successful GET replies carry lineage bundle bodies inside protobuf replies (without a
+CommandsRegistry `{ok, result|error}` wrapper):
 
 ```json
 {
